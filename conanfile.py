@@ -30,6 +30,10 @@ class CairoConan(ConanFile):
     )
     source_subfolder = "cairo-{version}".format(version=version)
 
+    def build_requirements(self):
+        if self.settings.os == 'Windows':
+            self.build_requires('msys2_installer/20161025@bincrafters/stable')
+
     def requirements(self):
         if self.options.png:
             self.requires.add('libpng/1.6.36@bincrafters/stable')
