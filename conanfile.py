@@ -30,6 +30,10 @@ class CairoConan(ConanFile):
     )
     source_subfolder = "cairo-{version}".format(version=version)
 
+    def requirements(self):
+        if self.options.png:
+            self.requires.add('libpng/1.6.36@bincrafters/stable')
+    
     def source(self):
         url = "https://cairographics.org/releases/cairo-{version}.tar.xz".format(version=self.version)
         tools.get(url)
@@ -77,11 +81,12 @@ class CairoConan(ConanFile):
                     "--enable-png={}".format(yes_no(self.options.png)),
                     "--enable-svg={}".format(yes_no(self.options.svg)),
                 ]
-                vars = env_build.vars
-                vars["PKG_CONFIG_PIXMAN_0_38_0_PREFIX"] = self.deps_cpp_info["pixman"].rootpath
-                vars["PKG_CONFIG_PATH"] = os.path.join(self.deps_cpp_info["pixman"].rootpath, "lib", "pkgconfig")
-                print(vars)
-                env_build.configure(args=args, vars=vars)
+                env_vars = env_build.vars
+                pkg_config_paths = [os.path.join(self.deps_cpp_info["pixman"].rootpath, "lib", "pkgconfig")]
+                if self.options.png:
+                    pkg_config_paths.append(os.path.join(self.deps_cpp_info["libpng"].rootpath, "lib", "pkgconfig"))
+                env_vars["PKG_CONFIG_PATH"] = ":".join(pkg_config_paths)
+                env_build.configure(args=args, vars=env_vars)
                 env_build.make()
                 env_build.install()
 
