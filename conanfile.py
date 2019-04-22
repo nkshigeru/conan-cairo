@@ -1,5 +1,7 @@
 from conans import ConanFile, AutoToolsBuildEnvironment, tools
+import glob
 import os
+import shutil
 
 
 class CairoConan(ConanFile):
@@ -33,33 +35,75 @@ class CairoConan(ConanFile):
         tools.get(url)
 
     def build(self):
-        with tools.chdir(self.source_subfolder):
-            env_build = AutoToolsBuildEnvironment(self)
-            env_build.pic = self.options.fPIC
-            def yes_no(b):
-                return "yes" if b else "no"
-            args = [
-                "--enable-shared={}".format(yes_no(self.options.shared)),
-                "--enable-static={}".format(yes_no(not self.options.shared)),
-                "--enable-png={}".format(yes_no(self.options.png)),
-                "--enable-svg={}".format(yes_no(self.options.svg)),
-            ]
-            vars = env_build.vars
-            vars["PKG_CONFIG_PIXMAN_0_38_0_PREFIX"] = self.deps_cpp_info["pixman"].rootpath
-            vars["PKG_CONFIG_PATH"] = os.path.join(self.deps_cpp_info["pixman"].rootpath, "lib", "pkgconfig")
-            print(vars)
-            env_build.configure(args=args, vars=vars)
-            env_build.make()
-            env_build.install()
+        if self.settings.os == "Windows":
+            cfg = str(self.settings.build_type).lower()
+            pixman_includedir = "pixman/pixman"
+            pixman_libdir = "pixman/pixman/%s" % cfg
+            os.makedirs(pixman_libdir)
+            h_files = glob.glob('%s/include/pixman-1/*.h' % self.deps_cpp_info["pixman"].rootpath)
+            for x in h_files:
+                shutil.copy(x, pixman_includedir)
+            lib_files = glob.glob('%s/lib/*.lib' % self.deps_cpp_info["pixman"].rootpath)
+            for x in lib_files:
+                shutil.copy(x, pixman_libdir)
+
+            with tools.chdir(self.source_subfolder):
+                features = "build/Makefile.win32.features"
+                tools.replace_in_file(features, "CAIRO_HAS_PDF_SURFACE=1", "CAIRO_HAS_PDF_SURFACE=0")
+                tools.replace_in_file(features, "CAIRO_HAS_PS_SURFACE=1", "CAIRO_HAS_PS_SURFACE=0")
+                tools.replace_in_file(features, "CAIRO_HAS_SCRIPT_SURFACE=1", "CAIRO_HAS_SCRIPT_SURFACE=0")
+                if self.options.png:
+                    #TODO
+                    pass
+                else:
+                    tools.replace_in_file(features, "CAIRO_HAS_PNG_FUNCTIONS=1", "CAIRO_HAS_PNG_FUNCTIONS=0")
+                if self.options.svg:
+                    #TODO
+                    pass
+                else:
+                    tools.replace_in_file(features, "CAIRO_HAS_SVG_SURFACE=1", "CAIRO_HAS_SVG_SURFACE=0")
+
+                with tools.vcvars(self.settings):
+                    self.run("make -f Makefile.win32 CFG={cfg}".format(cfg=cfg))
+        else:
+            with tools.chdir(self.source_subfolder):
+                env_build = AutoToolsBuildEnvironment(self)
+                env_build.pic = self.options.fPIC
+                def yes_no(b):
+                    return "yes" if b else "no"
+                args = [
+                    "--enable-shared={}".format(yes_no(self.options.shared)),
+                    "--enable-static={}".format(yes_no(not self.options.shared)),
+                    "--enable-png={}".format(yes_no(self.options.png)),
+                    "--enable-svg={}".format(yes_no(self.options.svg)),
+                ]
+                vars = env_build.vars
+                vars["PKG_CONFIG_PIXMAN_0_38_0_PREFIX"] = self.deps_cpp_info["pixman"].rootpath
+                vars["PKG_CONFIG_PATH"] = os.path.join(self.deps_cpp_info["pixman"].rootpath, "lib", "pkgconfig")
+                print(vars)
+                env_build.configure(args=args, vars=vars)
+                env_build.make()
+                env_build.install()
 
     def package(self):
-        self.copy("*.h", dst="include", src="hello")
-        self.copy("*hello.lib", dst="lib", keep_path=False)
-        self.copy("*.dll", dst="bin", keep_path=False)
-        self.copy("*.so", dst="lib", keep_path=False)
-        self.copy("*.dylib", dst="lib", keep_path=False)
-        self.copy("*.a", dst="lib", keep_path=False)
+        if self.settings.os == "Windows":
+            h_files = [
+                "cairo-version.h",
+                "src/cairo-features.h",
+                "src/cairo.h",
+                "src/cairo-deprecated.h",
+                "src/cairo-win32.h",
+            ]
+            for x in h_files:
+                self.copy(x, dst="include/cairo", src=self.source_subfolder, keep_path=False)
+            self.copy("*.lib", dst="lib", src=self.source_subfolder, keep_path=False)
+            self.copy("*.dll", dst="bin", keep_path=False)
 
     def package_info(self):
+        if self.settings.os == "Windows":
+            if self.options.shared:
+                self.cpp_info.libs = ["cairo"]
+            else:
+                self.cpp_info.libs = ["cairo-static"]
         self.cpp_info.libs = ["cairo"]
 
