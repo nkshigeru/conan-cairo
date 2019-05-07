@@ -22,7 +22,7 @@ class CairoConan(ConanFile):
     default_options = {
         "shared": True,
         "fPIC": True,
-        "png": True,
+        "png": False,
         "svg": False,
     }
     requires = (
