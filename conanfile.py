@@ -30,6 +30,10 @@ class CairoConan(ConanFile):
     )
     source_subfolder = "cairo-{version}".format(version=version)
 
+    def config_options(self):
+        if self.settings.os == 'Windows':
+            del self.options.fPIC
+
     def build_requirements(self):
         if self.settings.os == 'Windows':
             self.build_requires('msys2_installer/20161025@bincrafters/stable')
